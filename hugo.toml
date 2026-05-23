@@ -1,0 +1,8 @@
+baseURL = "https://vkaschism.github.io/"
+languageCode = "en-us"
+title = "vkaschism"
+theme = "PaperMod"
+
+[caches]
+  [caches.images]
+    dir = ':cacheDir/images'
