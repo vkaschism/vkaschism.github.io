@@ -1,7 +1,7 @@
 ---
 title: "Arithmetic Evaluation on Small Language Model - part 1"
 date: 2026-05-26
-draft: true
+draft: false
 ---
 
 i want to learn how to train LLMs. so, here's what i'm planning to do 
@@ -22,18 +22,21 @@ wait. just some basic intro before starting it. in order to judge whether a mode
 the simplest math evals is just arithmetic - asking the model to answer 2+4, 3+84, etc. this is basically a test for 1st or 2nd standard kids when they're starting to learn math. we can start with the adding 1 digit numbers with 1 digit numbers, and then (1,2) digits, (2,2) digits... and maybe see if the addition fails in cases where carry-addition is taking place. whatever it is, we'll see the results. we can go for subtraction, multiplication, division later which might become more and more difficult for the model to answer.
 (1,1) digit addition results in 100 combinations while (1,2) has 900 combinations. not many. something a free colab T4 GPU can easily handle.
 
-![example query of addition](img.png)
 
 **DECIDING THE MODEL**
 
 the obvious choice when starting out is to pick the smallest model that doesn't cost too much compute. also, it's wise to pick a model that is capable of answering at least a few of those questions in the eval dataset. it'd be weird if the model answers wrong on every single question. i'm choosing google/gemma-2-2b-it and using it from huggingface. better to choose an _instruction tuned model(it)_ as it follows instructions better and is quite popular and small. it's a 2 billion parameter model while the real world LLMs can go for a trillion parameters. (more on parameters later)
 
-![list of gemma models on huggingface](img.png)
+
+![list of gemma models on huggingface](images/1/list_gemma_models.png)
+
 
 > from this point onwards, it'll be **google/gemma-2-2b-it** model that we're going to use. and this is what _model_ will refer to, in case of ambiguous sentences.
 here's a sample of what we're gonna do.
 
-![evals overview](img.png)
+
+![evals overview](images/1/example_query_addition.png)
+
 
 **CREATING THE DATASET**
 
@@ -110,7 +113,9 @@ from huggingface_hub import login
 login()
 ```
 
+
 > the bitsandbytes is used to make sure that we're using 4bit quantization for lite-compute version of the model. (more on this later)
+
 
 ```python
 import torch
@@ -139,7 +144,10 @@ model = AutoModelForCausalLM.from_pretrained(
 print("Model loaded.")
 ```
 
+
 in order to keep the evaluation easy, we'll first evaluate the model when queried to only respond with the integer answer. and we'll look at whatever response it generates, whether it follows the instruction and responds only with an integer or not, we just extract the _last_ integer in this case. 
+
+
 ```python
 import re
 import pandas as pd
@@ -211,23 +219,32 @@ accuracy = df["correct"].mean()
 
 print(f"\nAccuracy: {accuracy:.4f}")
 ```
+
+
 again, i am just extracting all the integers from the response, also making sure that "-" sign is considered in case of negative integers, and then just choosing the _last_ mentioned integer from the response text that the model generated. this isn't perfect but this is what i'm going with right now.
 
 "tqdm" is just here to display the longrunning loops progress textually.
 
 regarding how the model works in the GPU, to be vague and short, we take the query text, turn it into tokens using a tokenizer from pytorch and then sending that data to the model as an input to get back another list of tokens while limiting the max number of tokens that the model can generate, and then turning those tokens into text. the ```do_sample=False``` part tells the model to generate deterministic output so that it can result in the same response every single time for the same query. and the ```skip_special_tokens=True``` allows us to remove special tokens like <bos>, <eos>, etc. beginning/end of sentence thing. you can have many different special tokens that helps with structuring the output but is not necessary to be displayed to the user.
 
+
 all human verified datasets are considered as **golden datasets**. i use the term _gold_ here to refer to the fact that i made sure that there are no discrepancies in the dataset and is verified by a human. actually, people store a lot of raw data scraped from the internet. this raw data is usually considered as **bronze** level. when it's processed and a bit more trustworthy, it's **silver** level and when it's processed further and is of higher(production grade) quality, it can be considered as **gold** level. so, all we're doing here is to extract the last integer and then compare that with the gold standard dataset answers and then mark it right if they're equal. you can use pandas to analyze the data. 
 
-![results of restrictive prompt (1,1) addition](img.png)
+
+![results of restrictive prompt (1,1) addition](images/1/results_restrict_1_1_addn.png)
+
 
 as you can see, the model hits a perfect score, 100% accurate on (1-1) digit addition. if some eval hits 100% accuracy, it's no longer considered significant because there's no scope for us to improve any further. we ran this session with a restricted prompt to only respond with integer answer. instead, we can simply ask a question and see what it responds with. just plain "What is 1 + 2?" and then we get to see slight decrease in the accuracy, which is quite surprising considering the fact that it is just a sum of _two_ single digit numbers.
 
-![results of direct (1,1) addition](img.png)
+
+![results of direct (1,1) addition](images/1/results_1_1_addn.png)
+
 
 let's just see the cases where it went wrong. 
 
-![error list of (1,1) addition](img.png)
+
+![error list of (1,1) addition](images/1/error_list_1_1_addn.png)
+
 
 > What is 1 + 0?
 
@@ -255,9 +272,13 @@ you can see how all the answers were perfectly right but it was the way we extra
 
 also, most importantly, there are 7 other digits that can fall into the same category as the failed cases but somehow ended up successful. the reason is kinda funny and you can see it in the screenshot below. 
 
-![6+0? case](img.png)
+
+![6+0? case](images/1/6_0_case.png)
+
 
 in the non-failed cases, the model chose the token for "zero" instead of choosing the token for "0". there's no rule that only one of these is right. so, i'm not sure if this behaviour has to be changed or it needs more finetuning in this case. you wouldn't try to convince a child that writing "zero" instead of "0" in a test is completely wrong. the max you can do is, maybe teach the kid about general conventions and the child has to make a judgement himself to decide when to use that. anyways, now that we've got a 100% accuracy in (1,1) digit addition even for a direct query, it is time to move on to (1,2) digit additions. first task is to create the dataset. 
+
+
 ```python
 samples = []
 sample_id = 0
@@ -281,7 +302,10 @@ for i in range(0,10):
     sample_id +=1
 ```
 
+
 after creating this dataset, we can just repeat the same thing that we did before. just pasting the same code here to avoid unnecessary scrolling. note that it has a prompt restriction asking it to only respond with a numerical answer.
+
+
 ```python
 import re
 import pandas as pd
@@ -326,17 +350,23 @@ print(f"\nAccuracy: {accuracy:.4f}")
 ```
 
 here are the results
-![1,2 addn results](img.png)
+
+
+![1,2 addn results](images/1/results_1_2_addn.png)
+
 
 the model got 12 out of 900 wrong. the accuracy is 98.67%. definitely a bad thing here. 
 
-![1,2 addn failure cases](img.png)
+
+![1,2 addn failure cases](images/1/1_2_addn_failures.png)
+
 
 now, these failures are interesting. notice how the majority of the failures include "7". in the first two cases, maybe the model just blurted out the next "nice" number. maybe there are too many cases where the answer is a "nice" number like 50, 80, 90 100, etc. and for some reason that i can't even guess, the model is treating "7" as if it was a "0", why?? i have no clue at this point. also, as we forced the model to only respond with numerical values, there's no point looking at other successful attempts where "7" was part of the question. so, obviously, our next thought would be to run the model without restricting it to only numerical responses. but this time, we'll go for **batching**.
 
 batching is just a way to run the model many times in parallel so that we can utilize the entire GPU at once and minimize the time taken to finish the whole dataset. till now, when we're running evals, we only made the GPU process one request at once and then waited for it to finish before passing another request. for instance, if you want to translate a large dataset using LLMs (might not be a wise idea), you can pass as many input queries as you want(as long as GPU specs allow) and get the whole dataset translated quickly. but remember that you can't run something in parallel if you've no clue what the second input is going to be, like a user chatting with an LLM. this is where batching would make a difference. 
 
 for the (1,1) digit addition, it took me around a minute on google colab T4 GPU. and for the (1,2) digit addition, it was approx 13 minutes. we will run evals on the same dataset by batching. it took me around 5-6 minutes to finish the complete run. 
+
 
 ```python
 import re
@@ -437,12 +467,17 @@ print(df.head())
 print(f"\nAccuracy: {accuracy:.4f}")
 ```
 
+
 here are the results below.
 
-![batched eval 1,2 addn results](img.png)
+
+![batched eval 1,2 addn results](images/1/batched_1_2_results.png)
+
 
 surprisingly, the accuracy is now 99.67% which is definitely an improvement from 98.67% but we didn't really change anything. all we did is just run the same model in parallel. why did it happen. i have no idea at this point. apparently, when you're working with LLMs, the output isn't as determinstic as you'd like it to be. here below is the screenshot of 3 failed cases. somehow, "9" suddenly shows up in failures when batched.
 
-![failed batched eval 1,2 addn](img.png)
+
+![failed batched eval 1,2 addn](images/1/batched_1_2_failures.png)
+
 
 anyways, this is the end of current blog. my mind needs some rest. in the next blog, i'll try to figure out what's happening here and then also include all the "(more on this later)" part that i mentioned above. hakuna matata.
