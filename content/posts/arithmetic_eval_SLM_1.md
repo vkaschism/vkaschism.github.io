@@ -28,14 +28,14 @@ the simplest math evals is just arithmetic - asking the model to answer 2+4, 3+8
 the obvious choice when starting out is to pick the smallest model that doesn't cost too much compute. also, it's wise to pick a model that is capable of answering at least a few of those questions in the eval dataset. it'd be weird if the model answers wrong on every single question. i'm choosing google/gemma-2-2b-it and using it from huggingface. better to choose an _instruction tuned model(it)_ as it follows instructions better and is quite popular and small. it's a 2 billion parameter model while the real world LLMs can go for a trillion parameters. (more on parameters later)
 
 
-![list of gemma models on huggingface](images/1/list_gemma_models.png)
+![list of gemma models on huggingface](/1/list_gemma_models.png)
 
 
 > from this point onwards, it'll be **google/gemma-2-2b-it** model that we're going to use. and this is what _model_ will refer to, in case of ambiguous sentences.
 here's a sample of what we're gonna do.
 
 
-![evals overview](images/1/example_query_addition.png)
+![evals overview](/1/example_query_addition.png)
 
 
 **CREATING THE DATASET**
@@ -231,19 +231,19 @@ regarding how the model works in the GPU, to be vague and short, we take the que
 all human verified datasets are considered as **golden datasets**. i use the term _gold_ here to refer to the fact that i made sure that there are no discrepancies in the dataset and is verified by a human. actually, people store a lot of raw data scraped from the internet. this raw data is usually considered as **bronze** level. when it's processed and a bit more trustworthy, it's **silver** level and when it's processed further and is of higher(production grade) quality, it can be considered as **gold** level. so, all we're doing here is to extract the last integer and then compare that with the gold standard dataset answers and then mark it right if they're equal. you can use pandas to analyze the data. 
 
 
-![results of restrictive prompt (1,1) addition](images/1/results_restrict_1_1_addn.png)
+![results of restrictive prompt (1,1) addition](/1/results_restrict_1_1_addn.png)
 
 
 as you can see, the model hits a perfect score, 100% accurate on (1-1) digit addition. if some eval hits 100% accuracy, it's no longer considered significant because there's no scope for us to improve any further. we ran this session with a restricted prompt to only respond with integer answer. instead, we can simply ask a question and see what it responds with. just plain "What is 1 + 2?" and then we get to see slight decrease in the accuracy, which is quite surprising considering the fact that it is just a sum of _two_ single digit numbers.
 
 
-![results of direct (1,1) addition](images/1/results_1_1_addn.png)
+![results of direct (1,1) addition](/1/results_1_1_addn.png)
 
 
 let's just see the cases where it went wrong. 
 
 
-![error list of (1,1) addition](images/1/error_list_1_1_addn.png)
+![error list of (1,1) addition](/1/error_list_1_1_addn.png)
 
 
 > What is 1 + 0?
@@ -273,7 +273,7 @@ you can see how all the answers were perfectly right but it was the way we extra
 also, most importantly, there are 7 other digits that can fall into the same category as the failed cases but somehow ended up successful. the reason is kinda funny and you can see it in the screenshot below. 
 
 
-![6+0? case](images/1/6_0_case.png)
+![6+0? case](/1/6_0_case.png)
 
 
 in the non-failed cases, the model chose the token for "zero" instead of choosing the token for "0". there's no rule that only one of these is right. so, i'm not sure if this behaviour has to be changed or it needs more finetuning in this case. you wouldn't try to convince a child that writing "zero" instead of "0" in a test is completely wrong. the max you can do is, maybe teach the kid about general conventions and the child has to make a judgement himself to decide when to use that. anyways, now that we've got a 100% accuracy in (1,1) digit addition even for a direct query, it is time to move on to (1,2) digit additions. first task is to create the dataset. 
@@ -352,13 +352,13 @@ print(f"\nAccuracy: {accuracy:.4f}")
 here are the results
 
 
-![1,2 addn results](images/1/results_1_2_addn.png)
+![1,2 addn results](/1/results_1_2_addn.png)
 
 
 the model got 12 out of 900 wrong. the accuracy is 98.67%. definitely a bad thing here. 
 
 
-![1,2 addn failure cases](images/1/1_2_addn_failures.png)
+![1,2 addn failure cases](/1/1_2_addn_failures.png)
 
 
 now, these failures are interesting. notice how the majority of the failures include "7". in the first two cases, maybe the model just blurted out the next "nice" number. maybe there are too many cases where the answer is a "nice" number like 50, 80, 90 100, etc. and for some reason that i can't even guess, the model is treating "7" as if it was a "0", why?? i have no clue at this point. also, as we forced the model to only respond with numerical values, there's no point looking at other successful attempts where "7" was part of the question. so, obviously, our next thought would be to run the model without restricting it to only numerical responses. but this time, we'll go for **batching**.
@@ -471,13 +471,13 @@ print(f"\nAccuracy: {accuracy:.4f}")
 here are the results below.
 
 
-![batched eval 1,2 addn results](images/1/batched_1_2_results.png)
+![batched eval 1,2 addn results](/1/batched_1_2_results.png)
 
 
 surprisingly, the accuracy is now 99.67% which is definitely an improvement from 98.67% but we didn't really change anything. all we did is just run the same model in parallel. why did it happen. i have no idea at this point. apparently, when you're working with LLMs, the output isn't as determinstic as you'd like it to be. here below is the screenshot of 3 failed cases. somehow, "9" suddenly shows up in failures when batched.
 
 
-![failed batched eval 1,2 addn](images/1/batched_1_2_failures.png)
+![failed batched eval 1,2 addn](/1/batched_1_2_failures.png)
 
 
 anyways, this is the end of current blog. my mind needs some rest. in the next blog, i'll try to figure out what's happening here and then also include all the "(more on this later)" part that i mentioned above. hakuna matata.
