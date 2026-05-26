@@ -1,0 +1,448 @@
+---
+title: "Arithmetic Evaluation on Small Language Model - part 1"
+date: 2026-05-26
+draft: true
+---
+
+i want to learn how to train LLMs. so, here's what i'm planning to do 
+- run some basic evals first and then understand the results
+- and then optimize these runs
+- inference on GPUs and then optimizing the same thing
+- run evals on your own inference and compare with industry evals metrics
+- small scale finetuning, maybe something like LoRA and also learn how datasets are created in real world use cases
+- try creating language models at a very small scale irrespective of the low expected benchmarks
+- replicate any published paper that doesn't cost too much
+- at this point, i'll decide again what to do next, with the obvious goal of being able to train an LLM
+
+so, i'm gonna start with the simplest evals.
+wait. just some basic intro before starting it. in order to judge whether a model is working fine or not, we create a dataset with questions and right answers. and then we query the model with these questions and judge their responses, whether the model is answering right or not. it is assumed that these benchmarks might translate into real world usecase review. the closer our benchmarking dataset is to the real world use cases, the more you can believe your assumption to be true. but the most difficult part in evaluating models is that there is no ONE PERFECT RIGHT ANSWER for every question out there. the same question can be answered in multiple ways and can still be considered correct. the sentence formation, the preference of words, the response style, etc. all can vary to a great extent. but as the current task is to learn how to run evals, it is wise to pick the easiest one - math evals. the answer isn't _subjective_. no matter how you try to solve a problem, the end result must be same in all the cases of right answers, eventhough the process to find that answer might be different.
+
+**DECIDING THE EVALS**
+
+the simplest math evals is just arithmetic - asking the model to answer 2+4, 3+84, etc. this is basically a test for 1st or 2nd standard kids when they're starting to learn math. we can start with the adding 1 digit numbers with 1 digit numbers, and then (1,2) digits, (2,2) digits... and maybe see if the addition fails in cases where carry-addition is taking place. whatever it is, we'll see the results. we can go for subtraction, multiplication, division later which might become more and more difficult for the model to answer.
+(1,1) digit addition results in 100 combinations while (1,2) has 900 combinations. not many. something a free colab T4 GPU can easily handle.
+
+![example query of addition](img.png)
+
+**DECIDING THE MODEL**
+
+the obvious choice when starting out is to pick the smallest model that doesn't cost too much compute. also, it's wise to pick a model that is capable of answering at least a few of those questions in the eval dataset. it'd be weird if the model answers wrong on every single question. i'm choosing google/gemma-2-2b-it and using it from huggingface. better to choose an _instruction tuned model(it)_ as it follows instructions better and is quite popular and small. it's a 2 billion parameter model while the real world LLMs can go for a trillion parameters. (more on parameters later)
+
+![list of gemma models on huggingface](img.png)
+
+> from this point onwards, it'll be **google/gemma-2-2b-it** model that we're going to use. and this is what _model_ will refer to, in case of ambiguous sentences.
+here's a sample of what we're gonna do.
+
+![evals overview](img.png)
+
+**CREATING THE DATASET**
+
+ok. we'll start with (1,1)-digit addition. basically, picking a number from (0->9) and then picking another number from (0->9) and adding them. hopefully, the model will be able to solve it as these are easy ones. 
+```python
+import json
+from pathlib import Path
+
+# ==========================================
+# CREATE DATASET DIRECTORY
+# ==========================================
+
+DATASET_DIR = Path("/content/eval_datasets")
+DATASET_DIR.mkdir(exist_ok=True)
+
+# ==========================================
+# 1,1 ADDITION DATASET
+# ==========================================
+
+samples = []
+
+sample_id = 0
+
+for a in range(10):
+    for b in range(10):
+
+        question = f"What is {a} + {b}?"
+        answer = str(a + b)
+
+        samples.append({
+            "id": sample_id,
+            "task": "addition",
+            "digits": "1,1",
+            "question": question,
+            "answer": answer,
+            "a": a,
+            "b": b,
+            "operator": "+"
+        })
+
+        sample_id += 1
+
+# ==========================================
+# SAVE AS JSONL
+# ==========================================
+
+output_path = DATASET_DIR / "add_1_1.jsonl"
+
+with open(output_path, "w") as f:
+    for row in samples:
+        f.write(json.dumps(row) + "\n")
+
+print(f"Saved dataset to: {output_path}")
+print(f"Total samples: {len(samples)}")
+
+```
+
+the above code is generated by chatgpt and there will be many instances where chatgpt gencode is used. and it's absolutely fine as long as you understand what's happening in the code. the point is not to remember the syntax, it is to understand and use that knowledge whenever needed. gencode is just short for (LLM generated code).
+
+now that we're ready with our dataset, we can start running the model. the model is to be run on google colab T4 GPU with the help of huggingface. our first subtask is to load the model onto the GPU. install transformers, accelerate, sentencepiece and bitsandbytes first. regarding the bitsandbytes, there were some compatibility issues, so i had to specify the version. and then use your huggingfacehub token when prompted to login and download the model.
+
+```python
+!pip install -q \
+transformers \
+accelerate \
+sentencepiece
+```
+```python
+!pip install -U bitsandbytes>=0.46.1
+```
+```python
+from huggingface_hub import login
+
+login()
+```
+
+> the bitsandbytes is used to make sure that we're using 4bit quantization for lite-compute version of the model. (more on this later)
+
+```python
+import torch
+
+from transformers import (
+    AutoTokenizer,
+    AutoModelForCausalLM,
+    BitsAndBytesConfig
+)
+
+MODEL_NAME = "google/gemma-2-2b-it"
+
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_compute_dtype=torch.float16
+)
+
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+
+model = AutoModelForCausalLM.from_pretrained(
+    MODEL_NAME,
+    quantization_config=bnb_config,
+    device_map="auto"
+)
+
+print("Model loaded.")
+```
+
+in order to keep the evaluation easy, we'll first evaluate the model when queried to only respond with the integer answer. and we'll look at whatever response it generates, whether it follows the instruction and responds only with an integer or not, we just extract the _last_ integer in this case. 
+```python
+import re
+import pandas as pd
+from tqdm import tqdm
+
+# =====================================
+# INTEGER EXTRACTION
+# =====================================
+
+def extract_integer_response(text):
+
+    numbers = re.findall(r"-?\d+", text)
+
+    if len(numbers) == 0:
+        return None
+
+    return int(numbers[-1])
+
+# =====================================
+# EVAL LOOP
+# =====================================
+
+intro_prompt = "Respond only with the result of this question. "
+
+results = []
+
+for ele in tqdm(samples):
+
+    test_prompt = intro_prompt + ele['question']
+
+    inputs = tokenizer(
+        test_prompt,
+        return_tensors="pt"
+    ).to(model.device)
+
+    outputs = model.generate(
+        **inputs,
+        max_new_tokens=32,
+        do_sample=False
+    )
+
+    decoded_output = tokenizer.decode(
+        outputs[0],
+        skip_special_tokens=True
+    )
+
+    extracted_value = extract_integer_response(decoded_output)
+
+    gold_answer = int(ele['answer'])
+
+    is_correct = extracted_value == gold_answer
+
+    results.append({
+        "question": ele['question'],
+        "gold": gold_answer,
+        "prediction": extracted_value,
+        "correct": is_correct
+    })
+
+# =====================================
+# DATAFRAME
+# =====================================
+
+df = pd.DataFrame(results)
+
+print(df.head())
+
+accuracy = df["correct"].mean()
+
+print(f"\nAccuracy: {accuracy:.4f}")
+```
+again, i am just extracting all the integers from the response, also making sure that "-" sign is considered in case of negative integers, and then just choosing the _last_ mentioned integer from the response text that the model generated. this isn't perfect but this is what i'm going with right now.
+
+"tqdm" is just here to display the longrunning loops progress textually.
+
+regarding how the model works in the GPU, to be vague and short, we take the query text, turn it into tokens using a tokenizer from pytorch and then sending that data to the model as an input to get back another list of tokens while limiting the max number of tokens that the model can generate, and then turning those tokens into text. the ```do_sample=False``` part tells the model to generate deterministic output so that it can result in the same response every single time for the same query. and the ```skip_special_tokens=True``` allows us to remove special tokens like <bos>, <eos>, etc. beginning/end of sentence thing. you can have many different special tokens that helps with structuring the output but is not necessary to be displayed to the user.
+
+all human verified datasets are considered as **golden datasets**. i use the term _gold_ here to refer to the fact that i made sure that there are no discrepancies in the dataset and is verified by a human. actually, people store a lot of raw data scraped from the internet. this raw data is usually considered as **bronze** level. when it's processed and a bit more trustworthy, it's **silver** level and when it's processed further and is of higher(production grade) quality, it can be considered as **gold** level. so, all we're doing here is to extract the last integer and then compare that with the gold standard dataset answers and then mark it right if they're equal. you can use pandas to analyze the data. 
+
+![results of restrictive prompt (1,1) addition](img.png)
+
+as you can see, the model hits a perfect score, 100% accurate on (1-1) digit addition. if some eval hits 100% accuracy, it's no longer considered significant because there's no scope for us to improve any further. we ran this session with a restricted prompt to only respond with integer answer. instead, we can simply ask a question and see what it responds with. just plain "What is 1 + 2?" and then we get to see slight decrease in the accuracy, which is quite surprising considering the fact that it is just a sum of _two_ single digit numbers.
+
+![results of direct (1,1) addition](img.png)
+
+let's just see the cases where it went wrong. 
+
+![error list of (1,1) addition](img.png)
+
+> What is 1 + 0?
+
+> **Answer:** 1 
+
+> **Explanation:**  
+> This is a simple example of the concept of additive identity.  In mathematics, the additive identity is a number that, when added to any other number, does not change the original number.  In this case, the additive identity is 0. 
+
+> ----------
+> What is 3 + 0?
+
+> **Answer:** 3 
+
+> **Explanation:**  
+> The answer is 3 because adding 0 to any number doesn't change the number's value. 
+
+> -----------
+> What is 9 + 0?
+
+> **Answer:** 9 
+
+> **Explanation:**  Adding 0 to any number doesn't change the number.
+
+you can see how all the answers were perfectly right but it was the way we extracted the response that caused failure. all these failures use the sentence "adding 0..." in the explanation part and because i was selecting the last integer, i selected **0** instead of the clear answer mentioned in the response. a better way of evaluation would've been to identify the text **Answer:** and then picking the integer existing next to it. also, chatgpt suggested another way of extraction - to simply collect all the integers in the response and then check if our golden answer exists in that list of collected integers. this might simplify our work. in reality, the choice of our evaluator depends on the special cases that we need to tackle for our particular tasks. there's no "one right answer". it isn't wise to expect that there exists some "right answer" and anything that isn't THAT is somehow wrong. 
+
+also, most importantly, there are 7 other digits that can fall into the same category as the failed cases but somehow ended up successful. the reason is kinda funny and you can see it in the screenshot below. 
+
+![6+0? case](img.png)
+
+in the non-failed cases, the model chose the token for "zero" instead of choosing the token for "0". there's no rule that only one of these is right. so, i'm not sure if this behaviour has to be changed or it needs more finetuning in this case. you wouldn't try to convince a child that writing "zero" instead of "0" in a test is completely wrong. the max you can do is, maybe teach the kid about general conventions and the child has to make a judgement himself to decide when to use that. anyways, now that we've got a 100% accuracy in (1,1) digit addition even for a direct query, it is time to move on to (1,2) digit additions. first task is to create the dataset. 
+```python
+samples = []
+sample_id = 0
+
+for i in range(0,10):
+  for j in range(10,100):
+
+    question = f"What is {i} + {j} ?"
+    answer = str(i+j)
+
+    samples.append({
+        "id": sample_id,
+        "task": "addition",
+        "digits": "1, 2",
+        "question": question,
+        "answer": answer,
+        "a": i,
+        "b": j,
+        "operator": "+"
+    })
+    sample_id +=1
+```
+
+after creating this dataset, we can just repeat the same thing that we did before. just pasting the same code here to avoid unnecessary scrolling. note that it has a prompt restriction asking it to only respond with a numerical answer.
+```python
+import re
+import pandas as pd
+from tqdm import tqdm
+
+def extract_integer_response(text):
+
+    numbers = re.findall(r"-?\d+", text)
+
+    if len(numbers) == 0:
+        return None
+
+    return int(numbers[-1])
+
+
+pre_prompt = "Respond only with the numerical answer to this question. "
+
+results = []
+for ele in tqdm(samples):
+  test_prompt = pre_prompt + ele['question']
+  inputs = tokenizer(test_prompt, return_tensors="pt").to(model.device)
+  outputs = model.generate(
+      **inputs,
+      max_new_tokens = 32, # as it's responding with only numerical answer
+      do_sample = False
+  )
+  extracted_value = extract_integer_response(tokenizer.decode(outputs[0], skip_special_tokens=True))
+  gold_answer = int(ele['answer'])
+
+  is_correct = extracted_value == gold_answer
+  results.append({
+      "question": ele['question'],
+      "gold": gold_answer,
+      "prediction": extracted_value,
+      "correct": is_correct
+  })
+
+df = pd.DataFrame(results)
+print(df.head())
+accuracy = df["correct"].mean()
+print(f"\nAccuracy: {accuracy:.4f}")
+```
+
+here are the results
+![1,2 addn results](img.png)
+
+the model got 12 out of 900 wrong. the accuracy is 98.67%. definitely a bad thing here. 
+
+![1,2 addn failure cases](img.png)
+
+now, these failures are interesting. notice how the majority of the failures include "7". in the first two cases, maybe the model just blurted out the next "nice" number. maybe there are too many cases where the answer is a "nice" number like 50, 80, 90 100, etc. and for some reason that i can't even guess, the model is treating "7" as if it was a "0", why?? i have no clue at this point. also, as we forced the model to only respond with numerical values, there's no point looking at other successful attempts where "7" was part of the question. so, obviously, our next thought would be to run the model without restricting it to only numerical responses. but this time, we'll go for **batching**.
+
+batching is just a way to run the model many times in parallel so that we can utilize the entire GPU at once and minimize the time taken to finish the whole dataset. till now, when we're running evals, we only made the GPU process one request at once and then waited for it to finish before passing another request. for instance, if you want to translate a large dataset using LLMs (might not be a wise idea), you can pass as many input queries as you want(as long as GPU specs allow) and get the whole dataset translated quickly. but remember that you can't run something in parallel if you've no clue what the second input is going to be, like a user chatting with an LLM. this is where batching would make a difference. 
+
+for the (1,1) digit addition, it took me around a minute on google colab T4 GPU. and for the (1,2) digit addition, it was approx 13 minutes. we will run evals on the same dataset by batching. it took me around 5-6 minutes to finish the complete run. 
+
+```python
+import re
+import pandas as pd
+from tqdm import tqdm
+
+# ==========================================
+# CONFIG
+# ==========================================
+
+BATCH_SIZE = 32
+
+# ==========================================
+# EVALUATION FUNCTION
+# ==========================================
+
+def response_contains_answer(text, gold):
+
+    numbers = re.findall(r"-?\d+", text)
+
+    numbers = [int(x) for x in numbers]
+
+    return gold in numbers
+
+# ==========================================
+# PREPARE PROMPTS
+# ==========================================
+
+prompts = [ele["question"] for ele in samples]
+
+results = []
+
+# ==========================================
+# BATCHED INFERENCE
+# ==========================================
+
+for start_idx in tqdm(range(0, len(samples), BATCH_SIZE)):
+
+    batch_samples = samples[start_idx:start_idx + BATCH_SIZE]
+
+    batch_prompts = [
+        ele["question"]
+        for ele in batch_samples
+    ]
+
+    inputs = tokenizer(
+        batch_prompts,
+        return_tensors="pt",
+        padding=True,
+        truncation=True
+    ).to(model.device)
+
+    outputs = model.generate(
+        **inputs,
+        max_new_tokens=64,
+        do_sample=False
+    )
+
+    # ======================================
+    # PROCESS EACH OUTPUT
+    # ======================================
+
+    for i, ele in enumerate(batch_samples):
+
+        input_length = inputs["input_ids"][i].shape[0]
+
+        generated_tokens = outputs[i][input_length:]
+
+        decoded_output = tokenizer.decode(
+            generated_tokens,
+            skip_special_tokens=True
+        ).strip()
+
+        gold_answer = int(ele["answer"])
+
+        is_correct = response_contains_answer(
+            decoded_output,
+            gold_answer
+        )
+
+        results.append({
+            "question": ele["question"],
+            "gold": gold_answer,
+            "raw_output": decoded_output,
+            "correct": is_correct
+        })
+
+# ==========================================
+# RESULTS
+# ==========================================
+
+df = pd.DataFrame(results)
+
+accuracy = df["correct"].mean()
+
+print(df.head())
+
+print(f"\nAccuracy: {accuracy:.4f}")
+```
+
+here are the results below.
+
+![batched eval 1,2 addn results](img.png)
+
+surprisingly, the accuracy is now 99.67% which is definitely an improvement from 98.67% but we didn't really change anything. all we did is just run the same model in parallel. why did it happen. i have no idea at this point. apparently, when you're working with LLMs, the output isn't as determinstic as you'd like it to be. here below is the screenshot of 3 failed cases. somehow, "9" suddenly shows up in failures when batched.
+
+![failed batched eval 1,2 addn](img.png)
+
+anyways, this is the end of current blog. my mind needs some rest. in the next blog, i'll try to figure out what's happening here and then also include all the "(more on this later)" part that i mentioned above. hakuna matata.
