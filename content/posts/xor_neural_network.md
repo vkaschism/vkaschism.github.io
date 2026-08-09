@@ -118,7 +118,7 @@ or else it belongs to blue group
 
 so, these parameters - the weights and biases - w1,w2 and b are the values that allow us to make a prediction using a perceptron or a neuron.
 
-![sama about parameter size](//3/image%20copy.png)
+![sama about parameter size](/3/image%20copy.png)
 
 when people talk about parameters, these weights and biases are what they mean
 
