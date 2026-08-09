@@ -1,10 +1,11 @@
 ---
 title: "Learning Backpropagation and implementing a neural network to replicate 1 bit binary XOR operation"
 date: 2026-08-09
-draft: true
+draft: false
 ---
 
 https://www.youtube.com/watch?v=VMj-3S1tku0
+
 ^karpathy’s intro to neural networks & backpropagation
 
 i wanted to understand ‘attention is all you need’ paper. here’s a resource - https://nlp.seas.harvard.edu/annotated-transformer/
@@ -41,7 +42,7 @@ here’s the core idea:
 
 let’s consider an equation `d = a*b + c`; if i increase ‘a’ with a very small value ‘h’, how will it influence the value of ‘d’? the expectation here is that we’re going to replace our question with an equation where we’ll find the coefficients of the equation that will somehow satisfy the question. as for the current blog, my goal is to calculate XOR of 2 inputs using a neural network implying that i want to figure out the coefficients of an equation that’ll give me the answer without even knowing the logic behind XOR.
 
-anyways, as for the equation d = a*b + c, the answer is simple. we differentiate ‘d’ wrt ‘a’ to understand how a small change in the value of ‘a’ will influence the value of ‘d’. we know that f’(x) = (f(x+h) - f(x))/h
+anyways, as for the equation d = a*b + c, the answer is simple. we differentiate ‘d’ wrt ‘a’ to understand how a small change in the value of ‘a’ will influence the value of ‘d’. we know that `f’(x) = (f(x+h) - f(x))/h`
 
 ```python
 a = 2
@@ -77,18 +78,26 @@ because the coefficient of ‘a’ is negative, the result of (a*b+c) is expecte
 this is the reason behind including a gradient in the ‘Value’ object. the gradient is supposed to tell us how to update the value of a particular object so that the final value which is a result of many operations on the previous objects can become closer to the expected value.
 
 https://www.youtube.com/watch?v=2-mzxsSWVCU&list=PL2zRqk16wsdo3VJmrusPU6xXHk37RuKzi
+
 ^another resource that teaches about neural networks.
+
 NOTE: watch both these resources before reading this blog. 
 
 let’s start with the smallest unit of a neural network/MLP(Multi Layer Perceptron) - neuron/perceptron.
 
 ![perceptron intro example](/static/3/perceptron_intro_example.png)
 
-as shown in the above picture, let’s say we want to classify or divide the plane into 2 parts. consider this as a binary classification problem. x1 and x2 are 2 inputs that can take any value and then the function f(x1,x2) should allow us to tell whether (x1,x2) will be part of the right side or left side of that line. how can we mathematically figure out the coefficients of x1 and x2 that will help us with this problem? let’s call the coefficients as w1 and w2 respectively. this will make the function f(x1,x2) = w1*x1 + w2*x2 but then if this is all we’ve got, every (0,0) will simply result in 0. but there is obviously a possibility where we might want the (0,0) to be present in a different place. so, let’s add a threshold kinda thing which will compensate for the lack of this possibility. let’s call this “bias” and denote it with ‘b’. now, the function f(x1,x2) becomes w1*x1 + w2*x2 + b.
-these values - (w1, w2 and b) are called as parameters of a neural network. our job is to figure out appropriate values of these so called parameters which will help us with classification of the 2d space into 2 parts. let’s assume both the weights to be -2 and the bias to be 3. now the function becomes -2x1-2x2+3. 
+as shown in the above picture, let’s say we want to classify or divide the plane into 2 parts. consider this as a binary classification problem. x1 and x2 are 2 inputs that can take any value and then the function f(x1,x2) should allow us to tell whether (x1,x2) will be part of the right side or left side of that line. how can we mathematically figure out the coefficients of x1 and x2 that will help us with this problem? let’s call the coefficients as w1 and w2 respectively. this will make the function `f(x1,x2) = w1*x1 + w2*x2` but then if this is all we’ve got, every (0,0) will simply result in 0. but there is obviously a possibility where we might want the (0,0) to be present in a different place. so, let’s add a threshold kinda thing which will compensate for the lack of this possibility. let’s call this “bias” and denote it with ‘b’. now, the function f(x1,x2) becomes `w1*x1 + w2*x2 + b`.
+
+these values - *(w1, w2 and b)* are called as **parameters** of a neural network. our job is to figure out appropriate values of these so called parameters which will help us with classification of the 2d space into 2 parts. let’s assume both the weights to be -2 and the bias to be 3. now the function becomes `-2x1-2x2+3`. 
+
 but this isn’t the end of this function. because we want to classify the 2d space into 2 different parts, we’ll say that anything that results in a negative value or zero will be considered as part of left side and anything that produces positive value will be considered as part of the right side. at this point, there’s still a chance you’re wondering what even is the point of all this stuff.
+
 ![parameter count data of some popular models](/static/3/parameter_count_examples.png)
-[https://labelyourdata.com/articles/llm-fine-tuning/llm-model-size]
+
+^[https://labelyourdata.com/articles/llm-fine-tuning/llm-model-size]
+
+
 
 ![red & blue binary classification graph](/static/3/image.png)
 
@@ -96,11 +105,11 @@ take a look at this above image. we’ve got a bunch of points and there are 2 k
 
 we gotta represent everything in a mathematical format and the way we tried to do this binary classification for this particular example is by writing a function like
 
-f(x1,x2) = w1*x1 + w2*x2 + b.
+`f(x1,x2) = w1*x1 + w2*x2 + b`.
 
-and then by through observation or maybe trial and error - we came up with the coefficients for this equation to be
+and then by through observation or maybe trial and error - let's say we came up with the coefficients for this equation to be
 
-f(x1,x2) = -2x1-2x2+3
+`f(x1,x2) = -2x1-2x2+3`
 
 the way a computer is going to classify if a point belongs to the red group or the blue group is to calculate this value and then check if it’s greater than 0 or not. so, the final function(let’s call this an activation function) becomes :
 
@@ -110,6 +119,7 @@ or else it belongs to blue group
 so, these parameters - the weights and biases - w1,w2 and b are the values that allow us to make a prediction using a perceptron or a neuron.
 
 ![sama about parameter size](/static//3/image%20copy.png)
+
 when people talk about parameters, these weights and biases are what they mean
 
 and, is this enough? nope. our classification problem can be difficult for a single perceptron to handle. look at the below classification.
@@ -119,10 +129,13 @@ and, is this enough? nope. our classification problem can be difficult for a sin
 if you were tasked to classify these red and blue points, you’d draw a circle around the blue points. anything inside the circle belongs to the blue group while everything outside of this circle will be part of the red group. now, will a linear equation be able to classify this? no matter what line you draw here, a single line cannot classify the points.
 
 ![lines solving spiral classification](/static/3/image%20copy%203.png)
+
 so, what if you could draw more lines using more perceptrons/neurons. any point that lies inside the triangle made by these 3 lines will be part of the blue group and rest of the points will belong to the red group. this tells you that if your model can use more neurons at once, then there’s a chance that you might be able to solve even difficult problems. you can keep increasing the number of neurons, call it a neural network and solve all your problems. all? maybe or maybe not.
 
 ![neural network generic image](/static/3/image%20copy%204.png)
+
 [https://www.geeksforgeeks.org/deep-learning/neural-network-node/]
+
 
 look at the arrangement of neurons in the above figure. you can arrange a bunch of neurons as a layer. you can have the input layer. and then the output of these neurons will pass as input to the next layer of neurons. and then as you keep doing this for layer after layer, you can have the final output layer. usually, you’ll be using something called an activation function at the last layer to allow us to make our predictions easier. remember the activation function i mentioned in the first example -
 
@@ -132,6 +145,7 @@ if(-2x1-2x2+3)>0 -> it belongs to red group
 or else it belongs to blue group
 
 this activation function is basically a step function.
+
 ![step function](/static/3/image%20copy%205.png)
 
 this step function does the job well for our current example as long as we try to predict if a data point belongs to a certain class in our classification problem. but it doesn’t give you much information when you try to move your data point slightly. i mean, when you move your data point to some extent, it stays 0 for a while but then suddenly, at some point, it’ll just start showing up 1. it’s impossible to understand how the small change in the data point is changing the final output. this is something we might be interested in - to be able to see how changing the input slightly influences the final output. the issue with this step function is that it changes itself abruptly. so, in order to avoid this problem, we tend to pick smoother activation functions - something like sigmoid or maybe softmax.
@@ -148,7 +162,9 @@ so, if our goal was to decrease ‘d’ slightly, we’ll have to increase ‘a�
 
 
 now that we’ve decided to measure gradients, we need to figure out the order in which we do it.
+
 ![backpropagation generic example](/static/3/image%20copy%207.png)
+
 [https://www.youtube.com/watch?v=An5z8lR8asY]
 
 
@@ -157,6 +173,7 @@ to make a prediction, all we do is calculate the output of each neuron and pass 
 for each neuron, we move back to its inputs( the neurons which operated together which are then passed as input to this neuron) and calculate how the previous layer is influencing/affecting it. the neurons in the previous layer can be stored as ‘_prev’ in the ‘Value’ object. if you keep going backwards, you can calculate the gradients/influence the previous layer has on the current layer. but because our goal is to minimize the final loss function, we can use chainrule in differentiation to calculate the effect of any particular neuron on the final loss function.
 
 ![chain rule visualization](/static/3/image%20copy%208.png)
+
 [https://en.wikipedia.org/wiki/Chain_rule]
 
 
@@ -199,7 +216,8 @@ parameter.data += -learning_rate*parameter.grad
 the negative sign indicates that we’re trying to decrease the loss by changing the *value* in the *opposite direction* of the gradient. the learning rate denotes how big we wanna update the value of the neuron. if you change the parameter’s value by a small number, the final loss function will also be changed by a small number and we can see if we’re updating the parameters appropriately.
 
 ![learning rate image](/static/3/image%20copy%209.png)
-[https://www.jeremyjordan.me/nn-learning-rate/]
+
+^[https://www.jeremyjordan.me/nn-learning-rate/]
 
 
 our task is to find the lowest point. if the learning rate is too high, we might keep skipping the lowest point. if our learning rate is too low, we might spend too much time to get to the lowest point. even though we can still find the lowest point, we care about getting to the lowest point quicker. so, the optimal choice here is to, maybe start with a suitably small learning rate and then as you feel you’re getting closer to the lowest point, you wanna make the learning rate even smaller so as to not skip anything accidentally.
@@ -710,6 +728,7 @@ after 100 iterations, it basically shows no improvements even if you keep going 
 
 ![XOR 1 bit graph](/static/3/image%20copy%2010.png)
 
+
 ```python
 [0, 0]: 0
 
@@ -731,6 +750,35 @@ we started with the goal to replicate 1 bit binary XOR operations using a neural
 
 
 i changed the learning rate from 0.001 to 0.05 and then i increased the number of epochs to 2000. here’s the loss for every 100 iterations.
+
+```python
+def loss_MSE(a, b):
+  return (a-b)**2
+
+nn2 = MLP(2, [2,1])
+x_input3 = [[0,0], [0,1], [1,0], [1,1]] # defining the input states
+y_true3 = [0, 1, 1, 0] # defining output states corresponding to the input states
+for epoch in range(1,2001):
+  loss = Value(0) # initializing loss with 0
+  learning_rate = 0.05 # fractional change
+  for x,y in zip(x_input3, y_true3):
+    inputs = [Value(v) for v in x]
+    current_output = nn2(inputs) # calling neuron1 with inputs to run forward pass
+    expected_output = Value(y)
+
+    loss += loss_MSE(expected_output, current_output[0]) # using Mean Squared Error function to calculate loss; (will use BCE later)
+  nn2.zero_grad() # resetting gradients of the neuron to 0 before every backpropagation
+  loss.backward() # running backpropagation on the loss function
+  for parameter in nn2.parameters():
+    parameter.data += -learning_rate*parameter.grad # updating parameters according to the gradients calculated during backpropagation
+  if epoch%100 == 0:
+    # print("<<>>")
+    print(loss.data)
+    # print(nn.parameters())
+
+```
+
+output:
 
 ```python
 1.0026311846275422
