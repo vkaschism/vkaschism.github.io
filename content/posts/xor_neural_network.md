@@ -93,13 +93,13 @@ these values - *(w1, w2 and b)* are called as **parameters** of a neural network
 
 but this isn’t the end of this function. because we want to classify the 2d space into 2 different parts, we’ll say that anything that results in a negative value or zero will be considered as part of left side and anything that produces positive value will be considered as part of the right side. at this point, there’s still a chance you’re wondering what even is the point of all this stuff.
 
-![parameter count data of some popular models](/static/3/parameter_count_examples.png)
+![parameter count data of some popular models](/3/parameter_count_examples.png)
 
 ^[https://labelyourdata.com/articles/llm-fine-tuning/llm-model-size]
 
 
 
-![red & blue binary classification graph](/static/3/image.png)
+![red & blue binary classification graph](/3/image.png)
 
 take a look at this above image. we’ve got a bunch of points and there are 2 kinds - red and blue. if i ask you to find a way to separate these 2 groups, the obvious choice is to simply draw a straight line between them. as long as you don’t find any contradictional data point to this, this simple straight line can act as a boundary that separates these two groups. it is worth acknowledging that this isn’t the only way to classify the points. you can move the line slightly leftwards or rightwards or maybe tilt a bit and still make sure that the red and blue points are on opposite sides. the truth is there is no one right answer. as long as we’re happy with it, we’ll call it a day. but here comes the main part - how do you make a computer be able to draw this line of separation?
 
@@ -118,21 +118,21 @@ or else it belongs to blue group
 
 so, these parameters - the weights and biases - w1,w2 and b are the values that allow us to make a prediction using a perceptron or a neuron.
 
-![sama about parameter size](/static//3/image%20copy.png)
+![sama about parameter size](//3/image%20copy.png)
 
 when people talk about parameters, these weights and biases are what they mean
 
 and, is this enough? nope. our classification problem can be difficult for a single perceptron to handle. look at the below classification.
 
-![spiral classification graph sample](/static/3/image%20copy%202.png)
+![spiral classification graph sample](/3/image%20copy%202.png)
 
 if you were tasked to classify these red and blue points, you’d draw a circle around the blue points. anything inside the circle belongs to the blue group while everything outside of this circle will be part of the red group. now, will a linear equation be able to classify this? no matter what line you draw here, a single line cannot classify the points.
 
-![lines solving spiral classification](/static/3/image%20copy%203.png)
+![lines solving spiral classification](/3/image%20copy%203.png)
 
 so, what if you could draw more lines using more perceptrons/neurons. any point that lies inside the triangle made by these 3 lines will be part of the blue group and rest of the points will belong to the red group. this tells you that if your model can use more neurons at once, then there’s a chance that you might be able to solve even difficult problems. you can keep increasing the number of neurons, call it a neural network and solve all your problems. all? maybe or maybe not.
 
-![neural network generic image](/static/3/image%20copy%204.png)
+![neural network generic image](/3/image%20copy%204.png)
 
 [https://www.geeksforgeeks.org/deep-learning/neural-network-node/]
 
@@ -146,11 +146,11 @@ or else it belongs to blue group
 
 this activation function is basically a step function.
 
-![step function](/static/3/image%20copy%205.png)
+![step function](/3/image%20copy%205.png)
 
 this step function does the job well for our current example as long as we try to predict if a data point belongs to a certain class in our classification problem. but it doesn’t give you much information when you try to move your data point slightly. i mean, when you move your data point to some extent, it stays 0 for a while but then suddenly, at some point, it’ll just start showing up 1. it’s impossible to understand how the small change in the data point is changing the final output. this is something we might be interested in - to be able to see how changing the input slightly influences the final output. the issue with this step function is that it changes itself abruptly. so, in order to avoid this problem, we tend to pick smoother activation functions - something like sigmoid or maybe softmax.
 
-![sigmoid function](/static/3/image%20copy%206.png)
+![sigmoid function](/3/image%20copy%206.png)
 
 these smooth functions allow us to observe the continuous change in the output as we change the input. but then, how exactly does it “tell” us? *gradients*.
 
@@ -163,7 +163,7 @@ so, if our goal was to decrease ‘d’ slightly, we’ll have to increase ‘a�
 
 now that we’ve decided to measure gradients, we need to figure out the order in which we do it.
 
-![backpropagation generic example](/static/3/image%20copy%207.png)
+![backpropagation generic example](/3/image%20copy%207.png)
 
 [https://www.youtube.com/watch?v=An5z8lR8asY]
 
@@ -172,7 +172,7 @@ to make a prediction, all we do is calculate the output of each neuron and pass 
 
 for each neuron, we move back to its inputs( the neurons which operated together which are then passed as input to this neuron) and calculate how the previous layer is influencing/affecting it. the neurons in the previous layer can be stored as ‘_prev’ in the ‘Value’ object. if you keep going backwards, you can calculate the gradients/influence the previous layer has on the current layer. but because our goal is to minimize the final loss function, we can use chainrule in differentiation to calculate the effect of any particular neuron on the final loss function.
 
-![chain rule visualization](/static/3/image%20copy%208.png)
+![chain rule visualization](/3/image%20copy%208.png)
 
 [https://en.wikipedia.org/wiki/Chain_rule]
 
@@ -215,7 +215,7 @@ parameter.data += -learning_rate*parameter.grad
 
 the negative sign indicates that we’re trying to decrease the loss by changing the *value* in the *opposite direction* of the gradient. the learning rate denotes how big we wanna update the value of the neuron. if you change the parameter’s value by a small number, the final loss function will also be changed by a small number and we can see if we’re updating the parameters appropriately.
 
-![learning rate image](/static/3/image%20copy%209.png)
+![learning rate image](/3/image%20copy%209.png)
 
 ^[https://www.jeremyjordan.me/nn-learning-rate/]
 
@@ -726,7 +726,7 @@ the loss seems to start at 1.5 approximately and then stops decreasing much when
 
 after 100 iterations, it basically shows no improvements even if you keep going for a 1000 iterations. this failure is expected behaviour.
 
-![XOR 1 bit graph](/static/3/image%20copy%2010.png)
+![XOR 1 bit graph](/3/image%20copy%2010.png)
 
 
 ```python
@@ -744,7 +744,7 @@ take a look at the expected classification. using 2 neurons would allow us to cl
 
 this says that our neural network takes 2 inputs. we have 1 hidden layer with 2 neurons and these will produce a single output in the end. here below is the network representation.
 
-![MLP(2,[2,1]) visual representation](/static/3/image%20copy%2011.png)
+![MLP(2,[2,1]) visual representation](/3/image%20copy%2011.png)
 
 we started with the goal to replicate 1 bit binary XOR operations using a neural network. when i first ran those 100 iterations with a sigmoid activation function, the output was still not good enough. it seemed like the loss was getting stuck after a while but the truth is that it wasn’t. the loss was getting smaller but the 100 iterations and slow learning rate wasn’t enough.
 
