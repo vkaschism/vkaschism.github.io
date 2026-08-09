@@ -85,7 +85,7 @@ NOTE: watch both these resources before reading this blog.
 
 let’s start with the smallest unit of a neural network/MLP(Multi Layer Perceptron) - neuron/perceptron.
 
-![perceptron intro example](/static/3/perceptron_intro_example.png)
+![perceptron intro example](/3/perceptron_intro_example.png)
 
 as shown in the above picture, let’s say we want to classify or divide the plane into 2 parts. consider this as a binary classification problem. x1 and x2 are 2 inputs that can take any value and then the function f(x1,x2) should allow us to tell whether (x1,x2) will be part of the right side or left side of that line. how can we mathematically figure out the coefficients of x1 and x2 that will help us with this problem? let’s call the coefficients as w1 and w2 respectively. this will make the function `f(x1,x2) = w1*x1 + w2*x2` but then if this is all we’ve got, every (0,0) will simply result in 0. but there is obviously a possibility where we might want the (0,0) to be present in a different place. so, let’s add a threshold kinda thing which will compensate for the lack of this possibility. let’s call this “bias” and denote it with ‘b’. now, the function f(x1,x2) becomes `w1*x1 + w2*x2 + b`.
 
